@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { YappyUpload } from "./yappy-upload"
 import { useToast } from "@/components/ui/use-toast"
 import { buildInvoicePDF, openPdfInNewTab } from "@/lib/invoice"
@@ -17,7 +16,8 @@ export default function CheckoutForm() {
   const router = useRouter()
   const { toast } = useToast()
 
-  const product: Product | undefined = useMemo(() => {
+  // Garantizamos que SIEMPRE haya un Product (usa el primero como fallback)
+  const product: Product = useMemo(() => {
     const id = params.get("productId")
     return products.find(p => p.id === id) ?? products[0]
   }, [products, params])
@@ -37,8 +37,7 @@ export default function CheckoutForm() {
   const [cvv, setCvv] = useState("")
   const [cardName, setCardName] = useState("")
 
-  if (!product) return <p>No hay productos.</p>
-
+  // Totales
   const subtotal = product.price
   const itbms = +(product.price * 0.07).toFixed(2)
   const total = +(subtotal + itbms).toFixed(2)
@@ -56,17 +55,21 @@ export default function CheckoutForm() {
     if (commonErr) { toast({ title: "Error", description: commonErr }); return }
 
     if (method === 'card') {
+      // Validaciones simples (DEMO)
       if (cardNumber.replace(/\s+/g, '').length < 12) { toast({ title: "Error", description: "Número de tarjeta inválido (DEMO)"}); return }
       if (!/^[0-9]{2}\/[0-9]{2}$/.test(exp)) { toast({ title: "Error", description: "MM/AA inválido (DEMO)"}); return }
       if (cvv.length < 3) { toast({ title: "Error", description: "CVV inválido (DEMO)"}); return }
       if (!cardName.trim()) { toast({ title: "Error", description: "Nombre en la tarjeta requerido (DEMO)"}); return }
 
+      // Crear orden pagada
       const order = addOrder({
-        product,
+        product, // <-- ahora es Product, no puede ser undefined
         customer: { fullName, idNumber: idNumber || undefined, email, phone: phone || undefined },
         method: 'card',
         status: 'paid',
       })
+
+      // Generar factura
       const { blob, invoiceNumber } = buildInvoicePDF(order)
       updateOrder(order.id, { invoiceNumber })
       openPdfInNewTab(blob)
@@ -75,9 +78,10 @@ export default function CheckoutForm() {
       return
     }
 
+    // Yappy (pending)
     if (!yappyImg) { toast({ title: "Error", description: "Sube el comprobante Yappy (DEMO)"}); return }
     const order = addOrder({
-      product,
+      product, // <-- garantizado
       customer: { fullName, idNumber: idNumber || undefined, email, phone: phone || undefined },
       method: 'yappy',
       status: 'pending_review',
@@ -92,9 +96,15 @@ export default function CheckoutForm() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Resumen</h2>
         <div className="rounded-2xl border p-4 space-y-2">
-          <div className="flex items-center justify-between"><span>{product.name}</span><span>${subtotal.toFixed(2)}</span></div>
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>ITBMS 7%</span><span>${itbms.toFixed(2)}</span></div>
-          <div className="flex items-center justify-between font-semibold border-t pt-2"><span>Total</span><span>${total.toFixed(2)}</span></div>
+          <div className="flex items-center justify-between">
+            <span>{product.name}</span><span>${subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>ITBMS 7%</span><span>${itbms.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center justify-between font-semibold border-t pt-2">
+            <span>Total</span><span>${total.toFixed(2)}</span>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">**DEMO**: No ingreses datos reales de tarjeta.</p>
       </section>
